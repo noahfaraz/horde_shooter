@@ -16,48 +16,38 @@ BIG_ENEMY_SPEED =120
 
 
 
-class Player(pygame.sprite.Sprite): # 1. Inherit from Sprite
+class Player(pygame.sprite.Sprite):
     def __init__(self):
-        super().__init__() # Initialize the parent sprite class
-        
-        # 2. Load the actual image asset (replace with your file name)
-        # .convert_alpha() keeps transparency intact
+        super().__init__()
+       
         self.image = pygame.image.load("assets/images/player_ship.png").convert_alpha()
         self.image = pygame.transform.scale(self.image, (40, 40))
         
-        # Scale the image to match your desired size if needed
         self.image = pygame.transform.scale(self.image, (50, 50)) 
         
-        # 3. Create the rect and position it
         self.rect = self.image.get_rect()
         self.rect.center = (SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)
         
-        # Keep your radius for collisions!
         self.radius = 20
         self.health = 3
         
-    # Quick helper property to easily grab the position as a Vector2
     @property
     def pos(self):
         return pygame.Vector2(self.rect.center)
 
     def move(self, dt, keys):
-        # Create a temporary Vector2 to handle float precision movement
         new_pos = self.pos
         if keys[pygame.K_w]: new_pos.y -= PLAYER_SPEED * dt
         if keys[pygame.K_s]: new_pos.y += PLAYER_SPEED * dt
         if keys[pygame.K_a]: new_pos.x -= PLAYER_SPEED * dt
         if keys[pygame.K_d]: new_pos.x += PLAYER_SPEED * dt
         
-        # Borders
         new_pos.x = max(0, min(SCREEN_WIDTH, new_pos.x))
         new_pos.y = max(0, min(SCREEN_HEIGHT, new_pos.y))
         
-        # Apply new coordinates back to the rect
         self.rect.center = (new_pos.x, new_pos.y)
 
     def draw(self, screen):
-        # Sprites are drawn using the image and rect
         screen.blit(self.image, self.rect)
 
 class Bullet:
@@ -135,18 +125,24 @@ class Game:
         self.game_over_font = pygame.font.Font(None, 74)
     
         # Audio
-        song=random.choice(['assets/sound/hellraiser.mp3','assets/sound/war_pigs.mp3'])
+        song=random.choice(['assets/sound/war_pigs.mp3','assets/sound/hellraiser.mp3','assets/sound/doom.mp3'])
         self.bullet_sfx = pygame.mixer.Sound('assets/sound/bullet_sound.mp3')
         self.bullet_sfx.set_volume(0.9)
         
 
         pygame.mixer.music.load(song)
-        if (song=='war_pigs.mp3'):
+        if (song=='assets/sound/war_pigs.mp3'):
             pygame.mixer.music.set_volume(0.5)  
             pygame.mixer.music.play(-1,60.0)
-        else:
+        elif song=='assets/sound/hellraiser.mp3':
              pygame.mixer.music.set_volume(0.3)  
              pygame.mixer.music.play(-1,45.0)
+        else:
+            pygame.mixer.music.set_volume(0.5)  
+            pygame.mixer.music.play(-1,0.0)
+
+            
+        
 
 
 
@@ -240,26 +236,23 @@ class Game:
                         self.slayed += 1
                         self.score += (5 if e.is_big else 2)
 
+           #pickup player collision
             for p in self.objects[:]:
                 p.on_player_contact(self.player)  # Call the contact check
                 if p.picked_up:
-                    self.objects.remove(p)        # Remove it from the list if collected
-
+                    self.objects.remove(p)   #removed once touched
     def reset_game(self):
-        self.player = Player()      # Creates a fresh player with full health
-        self.bullets = []           # Clears active bullets
-        self.enemies = []           # Clears existing enemies
+        self.player = Player()     
+        self.bullets = []           
+        self.enemies = []          
         self.score = 0
         self.slayed = 0
         self.is_game_over = False
         
-        # Restart the ready-up countdown
         self.ready_timer = 3.0
         self.game_started = False
         
-        # Reload and play the music from the beginning (or timestamp)
-        #pygame.mixer.music.play(-1, 45.0)
-
+        
     def draw(self):
         self.screen.fill('black')
         
