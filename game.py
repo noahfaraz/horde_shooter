@@ -24,13 +24,16 @@ class Player(pygame.sprite.Sprite):
         self.image = pygame.image.load("assets/images/player_ship.png").convert_alpha()
         self.image = pygame.transform.scale(self.image, (40, 40))
         
-        self.image = pygame.transform.scale(self.image, (50, 50)) 
         
         self.rect = self.image.get_rect()
         self.rect.center = (SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2)
         
         self.radius = 20
         self.health = 3
+        self.health_img=pygame.image.load("assets/images/player_life.png").convert_alpha()
+        self.health_img = pygame.transform.scale(self.health_img, (20, 20)) 
+
+
         
     @property
     def pos(self):
@@ -129,6 +132,7 @@ class Game:
         self.font = pygame.font.SysFont(None, 25)
         self.game_over_font = pygame.font.Font(None, 74)
         pygame.joystick.init()
+        pygame.mixer.init()
 
         self.controller = None
         if pygame.joystick.get_count() > 0:
@@ -141,12 +145,10 @@ class Game:
         self.bullet_sfx = pygame.mixer.Sound('assets/sound/bullet_sound.mp3')
         self.bullet_sfx.set_volume(0.85)
         self.enemy_death=pygame.mixer.Sound('assets/sound/enemy_death.wav')
-    
         
-
         pygame.mixer.music.load(song)
         if (song=='assets/sound/war_pigs.mp3'):
-            pygame.mixer.music.set_volume(0.7)  
+            pygame.mixer.music.set_volume(0.5)  
             pygame.mixer.music.play(-1,60.0)
         elif song=='assets/sound/hellraiser.mp3':
              pygame.mixer.music.set_volume(0.2)  
@@ -246,6 +248,7 @@ class Game:
             # Player-Enemy Collision
             if self.player.pos.distance_to(e.pos) < (self.player.radius + e.radius):
                 if e.is_big:
+                    self.player.health=0
                     self.is_game_over = True
                 else:
                     self.player.health -= 1
@@ -255,12 +258,12 @@ class Game:
 
             # Bullet-Enemy Collision
             for b in self.bullets[:]:
-                if b.pos.distance_to(e.pos) < (b.radius + e.radius):
+                if b.pos.distance_to(e.pos) < (b.radius + e.radius)+10:
                     e.health -= 1
                     if b in self.bullets: 
-                         self.enemy_death.play() 
                          self.bullets.remove(b)
                     if e.health <= 0:
+                        self.enemy_death.play() 
                         if e in self.enemies: self.enemies.remove(e)
                         self.slayed += 1
                         self.score += (5 if e.is_big else 1)
@@ -306,10 +309,16 @@ class Game:
         # UI
         score_txt = self.font.render(f"Score: {self.score}", True, 'BLUE')
         slayed_txt = self.font.render(f"SLAYED: {self.slayed}", True, 'white')
-        lives_txt=self.font.render(f"Total Lives: {max(0,self.player.health)}", True, 'white')
+        lives_txt=self.font.render(f"Total Lives:", True, 'white')
         self.screen.blit(score_txt, (10, 10))
         self.screen.blit(slayed_txt, (10, 40))
         self.screen.blit(lives_txt, (10, 70))
+
+        self.heart_startx=80
+        self.heart_starty=70
+        for i in range(self.player.health):
+            self.heart_startx+=30
+            self.screen.blit(self.player.health_img,(self.heart_startx,self.heart_starty))
 
 
 
