@@ -3,16 +3,17 @@ import random
 
 # --- CONFIGURATION & CONSTANTS ---
 SCREEN_WIDTH, SCREEN_HEIGHT = 500, 500
-PLAYER_SPEED = 350
+PLAYER_SPEED = 420
 BULLET_SPEED = 600
 ENEMY_SPEED = 180
 BIG_ENEMY_SPEED =120
 #incase of changing values for testing
 # SCREEN_WIDTH, SCREEN_HEIGHT = 500, 500
-# PLAYER_SPEED = 350
+# PLAYER_SPEED = 420
 # BULLET_SPEED = 600
 # ENEMY_SPEED = 180
 # BIG_ENEMY_SPEED =120
+
 
 
 
@@ -35,13 +36,18 @@ class Player(pygame.sprite.Sprite):
     def pos(self):
         return pygame.Vector2(self.rect.center)
 
-    def move(self, dt, keys):
+    def move(self, dt, keys,controller=None):
         new_pos = self.pos
         if keys[pygame.K_w]: new_pos.y -= PLAYER_SPEED * dt
         if keys[pygame.K_s]: new_pos.y += PLAYER_SPEED * dt
         if keys[pygame.K_a]: new_pos.x -= PLAYER_SPEED * dt
         if keys[pygame.K_d]: new_pos.x += PLAYER_SPEED * dt
-        
+
+        if controller:
+            new_pos.x += controller.get_axis(0) * PLAYER_SPEED * dt
+            new_pos.y += controller.get_axis(1) * PLAYER_SPEED * dt
+
+        #border management
         new_pos.x = max(0, min(SCREEN_WIDTH, new_pos.x))
         new_pos.y = max(0, min(SCREEN_HEIGHT, new_pos.y))
         
@@ -57,10 +63,10 @@ class Bullet:
         self.radius = 3
 
     def update(self, dt):
-        self.pos.x += (BULLET_SPEED * self.direction) * dt
+        self.pos.y += (BULLET_SPEED * self.direction) * dt
 
     def is_offscreen(self):
-        return self.pos.x < 0 or self.pos.x > SCREEN_WIDTH
+        return self.pos.y < 0 or self.pos.y > SCREEN_HEIGHT
 
     def draw(self, screen):
         pygame.draw.circle(screen, 'white', self.pos, self.radius)
@@ -81,7 +87,7 @@ class Enemy:
             if pos.distance_to(player_pos) > 150:
                 return pos
 
-    def update(self, player_pos, dt):
+    def update(self, player_pos, dt):   
         direction = (player_pos - self.pos)
         if direction.length() != 0:
             self.pos += direction.normalize() * self.speed * dt
@@ -103,7 +109,7 @@ class PickUp:
 
 
     def on_player_contact(self,player):
-        if self.pos.distance_to(player.pos)<35:
+        if self.pos.distance_to(player.pos)<40:
             self.picked_up=True
             player.health+=1
             
@@ -112,10 +118,9 @@ class PickUp:
             pygame.draw.circle(screen,self.color,self.pos,self.radius)
 
 
-        
+
 
         
-
 class Game:
     def __init__(self):
         pygame.init()
@@ -123,29 +128,32 @@ class Game:
         self.clock = pygame.time.Clock()
         self.font = pygame.font.SysFont(None, 25)
         self.game_over_font = pygame.font.Font(None, 74)
+        pygame.joystick.init()
+
+        self.controller = None
+        if pygame.joystick.get_count() > 0:
+            self.controller = pygame.joystick.Joystick(0)
+            self.controller.init()
+            print(f"Controller Connected: {self.controller.get_name()}")
     
         # Audio
         song=random.choice(['assets/sound/war_pigs.mp3','assets/sound/hellraiser.mp3','assets/sound/doom.mp3'])
         self.bullet_sfx = pygame.mixer.Sound('assets/sound/bullet_sound.mp3')
-        self.bullet_sfx.set_volume(0.9)
+        self.bullet_sfx.set_volume(0.85)
+        self.enemy_death=pygame.mixer.Sound('assets/sound/enemy_death.wav')
+    
         
 
         pygame.mixer.music.load(song)
         if (song=='assets/sound/war_pigs.mp3'):
-            pygame.mixer.music.set_volume(0.5)  
+            pygame.mixer.music.set_volume(0.7)  
             pygame.mixer.music.play(-1,60.0)
         elif song=='assets/sound/hellraiser.mp3':
-             pygame.mixer.music.set_volume(0.3)  
+             pygame.mixer.music.set_volume(0.2)  
              pygame.mixer.music.play(-1,45.0)
         else:
-            pygame.mixer.music.set_volume(0.5)  
+            pygame.mixer.music.set_volume(0.2)  
             pygame.mixer.music.play(-1,0.0)
-
-            
-        
-
-
-
 
         # Game Entities
         self.player = Player()
@@ -165,6 +173,9 @@ class Game:
         pygame.time.set_timer(self.BIG_ENEMY_SPAWN, 10000)
         self.HEALTH_PACK=pygame.USEREVENT+3
         pygame.time.set_timer(self.HEALTH_PACK,5000)
+     
+
+
 
     def handle_events(self):
         for event in pygame.event.get():
@@ -174,7 +185,13 @@ class Game:
             if self.is_game_over:
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_RETURN:
-                        self.reset_game()  # Call our clean reset!
+                        self.reset_game()  
+                
+                elif event.type==pygame.JOYBUTTONDOWN:
+                    if event.button== 2:
+                        self.reset_game()
+
+
             
             if not self.is_game_over:
                 if event.type == pygame.KEYDOWN:
@@ -185,8 +202,16 @@ class Game:
                         self.bullet_sfx.play() 
                         self.bullets.append(Bullet(self.player.pos.x - 20, self.player.pos.y, -1))
 
-            
-                
+
+                elif event.type == pygame.JOYBUTTONDOWN:
+                    if event.button == 0:
+                        self.bullet_sfx.play() 
+                        self.bullets.append(Bullet(self.player.pos.x + 20, self.player.pos.y-30, -1))  
+                    if event.button == 1: # 'B' Button pressed
+                        self.bullet_sfx.play() 
+                        self.bullets.append(Bullet(self.player.pos.x -20, self.player.pos.y-30, -1))
+
+                   
                 if event.type == self.ENEMY_SPAWN:
                     num_to_spawn = random.choice([2, 3, 4])
                     for _ in range(num_to_spawn):
@@ -198,12 +223,15 @@ class Game:
                 if event.type==self.HEALTH_PACK:
                     self.objects.append(PickUp())
 
+             
+                
+
 
     def update(self, dt):
         if self.is_game_over: return
 
         keys = pygame.key.get_pressed()
-        self.player.move(dt, keys)
+        self.player.move(dt, keys,self.controller)
 
         # Update Bullets
         for b in self.bullets[:]:
@@ -230,26 +258,31 @@ class Game:
                 if b.pos.distance_to(e.pos) < (b.radius + e.radius):
                     e.health -= 1
                     if b in self.bullets: 
-                        self.bullets.remove(b)
+                         self.enemy_death.play() 
+                         self.bullets.remove(b)
                     if e.health <= 0:
                         if e in self.enemies: self.enemies.remove(e)
                         self.slayed += 1
-                        self.score += (5 if e.is_big else 2)
+                        self.score += (5 if e.is_big else 1)
 
            #pickup player collision
             for p in self.objects[:]:
-                p.on_player_contact(self.player)  # Call the contact check
-                if p.picked_up:
-                    self.objects.remove(p)   #removed once touched
+                 p.on_player_contact(self.player)  # Call the contact check
+                 if p.picked_up:
+                     self.objects.remove(p)   #removed once touched
+
+
+
+            
     def reset_game(self):
         self.player = Player()     
         self.bullets = []           
-        self.enemies = []          
+        self.enemies = []     
+        self.objects=[]     
         self.score = 0
         self.slayed = 0
         self.is_game_over = False
         
-        self.ready_timer = 3.0
         self.game_started = False
         
         
@@ -264,7 +297,7 @@ class Game:
         else:
             msg = self.game_over_font.render("GAME OVER!", True, 'RED')
             self.screen.blit(msg, (SCREEN_WIDTH // 6, SCREEN_HEIGHT // 2 - 40))
-            restart_txt=self.font.render(f"Restart: Enter key", True, 'white')
+            restart_txt=self.font.render(f"Restart: Enter key or X button", True, 'white')
             self.screen.blit(restart_txt, (SCREEN_WIDTH // 6, SCREEN_HEIGHT // 2 - 70))
 
           
@@ -273,7 +306,7 @@ class Game:
         # UI
         score_txt = self.font.render(f"Score: {self.score}", True, 'BLUE')
         slayed_txt = self.font.render(f"SLAYED: {self.slayed}", True, 'white')
-        lives_txt=self.font.render(f"Total Lives: {self.player.health}", True, 'white')
+        lives_txt=self.font.render(f"Total Lives: {max(0,self.player.health)}", True, 'white')
         self.screen.blit(score_txt, (10, 10))
         self.screen.blit(slayed_txt, (10, 40))
         self.screen.blit(lives_txt, (10, 70))
@@ -292,4 +325,5 @@ class Game:
         pygame.quit()
 
 if __name__ == "__main__":
+    
     Game().run()
