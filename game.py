@@ -198,7 +198,7 @@ class Game:
             if not self.is_game_over:
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_SPACE:
-                        self.bullets.append(Bullet(self.player.pos.x + 20, self.player.pos.y, 1))
+                        self.bullets.append(Bullet(self.player.pos.x + 20, self.player.pos.y, -1))
                         self.bullet_sfx.play() 
                     if event.key == pygame.K_o:
                         self.bullet_sfx.play() 
