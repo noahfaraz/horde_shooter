@@ -89,12 +89,27 @@ class Enemy:
             pos = pygame.Vector2(random.randint(0, SCREEN_WIDTH), random.randint(0, SCREEN_HEIGHT))
             if pos.distance_to(player_pos) > 150:
                 return pos
+            
+    def separate(self, enemies, min_dist=30):
+        push = pygame.Vector2(0, 0)
+        for other in enemies:
+            if other is self:
+                continue
+            diff = self.pos - other.pos
+            dist = diff.length()
+            if 0 < dist < min_dist:
+                push += diff.normalize() * (min_dist - dist)  # stronger push when closer
+        return push
 
-    def update(self, player_pos, dt):   
+
+    def update(self, player_pos, dt, enemies):   # ← add enemies param
         direction = (player_pos - self.pos)
         if direction.length() != 0:
-            self.pos += direction.normalize() * self.speed * dt
+            move = direction.normalize() * self.speed
+            move += self.separate(enemies) * 5  # tweak multiplier to taste
+            self.pos += move * dt
 
+   
     def draw(self, screen):
         pygame.draw.circle(screen, self.color, self.pos, self.radius)
 
@@ -114,7 +129,7 @@ class PickUp:
     def on_player_contact(self,player):
         if self.pos.distance_to(player.pos)<40:
             self.picked_up=True
-            player.health+=1
+            player.health=min(5,player.health+1)
             
     def draw(self,screen):
         if not self.picked_up:
@@ -129,15 +144,23 @@ class Game:
         pygame.init()
         self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
         self.clock = pygame.time.Clock()
-        self.font = pygame.font.SysFont(None, 25)
-        self.game_over_font = pygame.font.Font(None, 74)
+        self.font = pygame.font.Font('assets/fonts/lower-pixel/LowresPixel-Regular.otf', 15)
+        self.start_font=pygame.font.Font('assets/fonts/lower-pixel/LowresPixel-Regular.otf', 40)
+        self.game_over_font = pygame.font.Font('assets/fonts/lower-pixel/LowresPixel-Regular.otf', 74)
         pygame.joystick.init()
         pygame.mixer.init()
+        self.controller_restart_check=False
 
         self.controller = None
         if pygame.joystick.get_count() > 0:
             self.controller = pygame.joystick.Joystick(0)
             self.controller.init()
+            global PLAYER_SPEED
+            global ENEMY_SPEED
+            global BIG_ENEMY_SPEED
+            PLAYER_SPEED=500
+            ENEMY_SPEED=250
+            BIG_ENEMY_SPEED=200
             print(f"Controller Connected: {self.controller.get_name()}")
     
         # Audio
@@ -167,6 +190,15 @@ class Game:
         self.slayed = 0
         self.running = True
         self.is_game_over = False
+        self.playing=False
+        self.options=['single player','settings','Quit']
+        self.selected_option=0
+        self.background=None
+        self.bg_y=0
+
+
+
+
 
         # Timers
         self.ENEMY_SPAWN = pygame.USEREVENT + 1
@@ -186,16 +218,63 @@ class Game:
 
             if self.is_game_over:
                 if event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_RETURN:
-                        self.reset_game()  
-                
-                elif event.type==pygame.JOYBUTTONDOWN:
-                    if event.button== 2:
-                        self.reset_game()
+                            if event.key == pygame.K_RETURN:
+                                self.reset_game()        # restart directly
+
+                            elif event.key == pygame.K_SPACE:
+                                self.reset_game()
+                                self.playing = False     # go to menu
+
+                elif event.type == pygame.JOYBUTTONDOWN:
+                    if event.button == 3: 
+                         self.controller_restart_check=True       # A - go to menu
+                         self.reset_game()
 
 
+                    elif event.button == 2:      # X - restart directly
+                            self.reset_game()
+        
+
+
+            if not self.is_game_over and not self.playing:
+                        if event.type == pygame.KEYDOWN:
+                            if event.key == pygame.K_w:
+                                self.selected_option = (self.selected_option - 1) % len(self.options)
+                            elif event.key == pygame.K_s:
+                                self.selected_option = (self.selected_option + 1) % len(self.options)
+                            elif event.key == pygame.K_RETURN:
+                                if self.selected_option == 0:
+                                    self.playing = True
+                                elif self.selected_option == 1:
+                                    print("Settings selected")
+                                elif self.selected_option == 2:
+                                    self.running = False
+
+
+                        elif event.type == pygame.JOYHATMOTION:
+                                 self.hat_x, self.hat_y = self.controller.get_hat(0)
+                                 if self.hat_y == 1:
+                                    self.selected_option = (self.selected_option - 1) % len(self.options)
+                                 elif self.hat_y == -1:
+                                    self.selected_option = (self.selected_option + 1) % len(self.options)
+                        elif event.type == pygame.JOYBUTTONDOWN:
+                                    if event.button==0:
+                                        if self.selected_option == 0:
+                                            self.playing = True
+                                        elif self.selected_option == 1:
+                                            print("Settings selected")
+                                        elif self.selected_option == 2:
+                                            self.running = False
+
+
+           
             
-            if not self.is_game_over:
+           
+                
+
+
+
+            elif not self.is_game_over and self.playing:
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_SPACE:
                         self.bullets.append(Bullet(self.player.pos.x + 20, self.player.pos.y, -1))
@@ -230,95 +309,133 @@ class Game:
 
 
     def update(self, dt):
-        if self.is_game_over: return
+        if self.is_game_over and not self.playing: return
 
-        keys = pygame.key.get_pressed()
-        self.player.move(dt, keys,self.controller)
 
-        # Update Bullets
-        for b in self.bullets[:]:
-            b.update(dt)
-            if b.is_offscreen():
-                self.bullets.remove(b)
+        if self.playing:
+            keys = pygame.key.get_pressed()
+            self.player.move(dt, keys,self.controller)
 
-        # Update Enemies & Collisions
-        for e in self.enemies[:]:
-            e.update(self.player.pos, dt)
-
-            # Player-Enemy Collision
-            if self.player.pos.distance_to(e.pos) < (self.player.radius + e.radius):
-                if e.is_big:
-                    self.player.health=0
-                    self.is_game_over = True
-                else:
-                    self.player.health -= 1
-                    self.enemies.remove(e)
-                    if self.player.health <= 0:
-                        self.is_game_over = True
-
-            # Bullet-Enemy Collision
+            # Update Bullets
             for b in self.bullets[:]:
-                if b.pos.distance_to(e.pos) < (b.radius + e.radius)+10:
-                    e.health -= 1
-                    if b in self.bullets: 
-                         self.bullets.remove(b)
-                    if e.health <= 0:
-                        self.enemy_death.play() 
-                        if e in self.enemies: self.enemies.remove(e)
-                        self.slayed += 1
-                        self.score += (5 if e.is_big else 1)
+                b.update(dt)
+                if b.is_offscreen():
+                    self.bullets.remove(b)
 
-           #pickup player collision
-            for p in self.objects[:]:
-                 p.on_player_contact(self.player)  # Call the contact check
-                 if p.picked_up:
-                     self.objects.remove(p)   #removed once touched
+            # Update Enemies & Collisions
+            for e in self.enemies[:]:
+                e.update(self.player.pos, dt,self.enemies)
+
+                # Player-Enemy Collision
+                if self.player.pos.distance_to(e.pos) < (self.player.radius + e.radius):
+                    if e.is_big:
+                        self.player.health=0
+                        self.is_game_over = True
+                    else:
+                        self.player.health -= 1
+                        self.enemies.remove(e)
+                        if self.player.health <= 0:
+                            self.is_game_over = True
+
+                # Bullet-Enemy Collision
+                for b in self.bullets[:]:
+                    if b.pos.distance_to(e.pos) < (b.radius + e.radius)+10:
+                        e.health -= 1
+                        if b in self.bullets: 
+                            self.bullets.remove(b)
+                        if e.health <= 0:
+                            self.enemy_death.play() 
+                            if e in self.enemies: self.enemies.remove(e)
+                            self.slayed += 1
+                            self.score += (5 if e.is_big else 1)
+
+            #pickup player collision
+                for p in self.objects[:]:
+                    p.on_player_contact(self.player)  # Call the contact check
+                    if p.picked_up:
+                        self.objects.remove(p)   #removed once touched
 
 
 
             
     def reset_game(self):
-        self.player = Player()     
-        self.bullets = []           
-        self.enemies = []     
-        self.objects=[]     
+        self.player = Player()
+        self.bullets = []
+        self.enemies = []
+        self.objects = []
         self.score = 0
         self.slayed = 0
         self.is_game_over = False
-        
-        self.game_started = False
+
+        if self.controller_restart_check:
+            self.playing = False   # A button → go to menu
+        else:
+            self.playing = True    # X button → restart directly
+
+        self.controller_restart_check = False  # reset flag AFTER checking
+       
         
         
     def draw(self):
-        self.screen.fill('black')
-        
-        if not self.is_game_over:
+        self.screen.fill((0, 0, 0))  # ADD THIS as first line
+
+
+        if not self.is_game_over and not self.playing:
+           self.background = pygame.image.load("assets/images/background_pic.png")
+           self.background = pygame.transform.scale(self.background, (SCREEN_WIDTH, SCREEN_HEIGHT))
+           self.screen.blit(self.background, (0, self.bg_y))
+           self.screen.blit(self.background, (0, self.bg_y - SCREEN_HEIGHT))
+           self.bg_y+=2
+           if self.bg_y >= SCREEN_HEIGHT:
+                self.bg_y = 0
+
+           self.start_msg=self.start_font.render('Space Shooter',True,'White')
+           self.screen.blit(self.start_msg, (SCREEN_WIDTH //2-120, SCREEN_HEIGHT // 2 - 100))
+           self.menu_font = pygame.font.Font('assets/fonts/lower-pixel/LowresPixel-Regular.otf', 20)
+           for i, option in enumerate(self.options):
+
+                if i == self.selected_option:
+                    color = (255, 255, 0)      # Yellow highlight
+                    prefix = "> "
+                else:
+                    color = (255, 255, 255)    # White
+                    prefix = "  "
+
+                text = self.menu_font.render(prefix + option, True, color)
+                self.screen.blit(text, (150, 240 + i * 70))
+                    
+
+        elif not self.is_game_over and self.playing:
             self.player.draw(self.screen)
             for b in self.bullets: b.draw(self.screen)
             for e in self.enemies: e.draw(self.screen)
             for p in self.objects: p.draw(self.screen)
-        else:
+        elif self.is_game_over:   
             msg = self.game_over_font.render("GAME OVER!", True, 'RED')
             self.screen.blit(msg, (SCREEN_WIDTH // 6, SCREEN_HEIGHT // 2 - 40))
             restart_txt=self.font.render(f"Restart: Enter key or X button", True, 'white')
+            main_menu_txt=self.font.render(f"Main Menu: Space Bar", True, 'white')
+            
             self.screen.blit(restart_txt, (SCREEN_WIDTH // 6, SCREEN_HEIGHT // 2 - 70))
+            self.screen.blit(main_menu_txt, (SCREEN_WIDTH // 6, SCREEN_HEIGHT // 2 - 90))
 
           
 
 
         # UI
-        score_txt = self.font.render(f"Score: {self.score}", True, 'BLUE')
-        slayed_txt = self.font.render(f"SLAYED: {self.slayed}", True, 'white')
-        lives_txt=self.font.render(f"Total Lives:", True, 'white')
-        self.screen.blit(score_txt, (10, 10))
-        self.screen.blit(slayed_txt, (10, 40))
-        self.screen.blit(lives_txt, (10, 70))
+        if self.playing:
+            score_txt = self.font.render(f"Score: {self.score}", True, 'BLUE')
+            slayed_txt = self.font.render(f"SLAYED: {self.slayed}", True, 'white')
+            lives_txt=self.font.render(f"Total Lives:", True, 'white')
+            self.screen.blit(score_txt, (10, 10))
+            self.screen.blit(slayed_txt, (10, 40))
+            self.screen.blit(lives_txt, (10, 70))
 
-        self.heart_startx=80
-        self.heart_starty=70
-        for i in range(self.player.health):
-            self.heart_startx+=30
-            self.screen.blit(self.player.health_img,(self.heart_startx,self.heart_starty))
+            self.heart_startx=80
+            self.heart_starty=70
+            for i in range(self.player.health):
+                self.heart_startx+=30
+                self.screen.blit(self.player.health_img,(self.heart_startx,self.heart_starty))
 
 
 
