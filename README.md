@@ -1,8 +1,8 @@
 # Horde Shooter
 
-A small top-down arcade shooter built with Python and Pygame. Dots come at you, you shoot the dots, and the dots keep coming. How long can you last?
+A small top-down arcade shooter built with Python and Pygame. Enemies come at you from everywhere, you shoot them, and they keep on coming. How long can you last?
 
-It's a simple game, but it has a menu, sound, controller support and a few enemy types.
+It's a simple game, but it has a menu, sound, controller support and two enemy types.
 
 ## How to Play
 
