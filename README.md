@@ -6,13 +6,13 @@ It's a simple game, but it has a menu, sound, controller support and a few enemy
 
 ## How to Play
 
-Stay alive, shoot as many enemies as you can, and grab green health pickups when they appear.
+Stay alive, shoot as many enemies as you can, and grab the heart health pickups when they appear.
 
 | Thing | What it does |
 |-------|--------------|
-| 🔴 Red enemy | Dies in 1 hit, worth 1 point. Touching one costs you a life. |
-| 🔵 Blue enemy | Bigger and slower, takes 3 hits, worth 5 points. **Touching one is instant game over.** |
-| 🟢 Green pickup | Restores 1 life (max 5). Appears every few seconds. |
+|  Small red enemy ships | Dies in 1 hit, worth 1 point. Touching one costs you a life. |
+| Big Blue enemy ships | Bigger and slower, takes 3 hits, worth 5 points. **Touching one is instant game over.** |
+| Heart pickup | Restores 1 life (max 5). Appears every few seconds. |
 
 You start with 3 lives. Enemies spawn in groups of 2-4 every couple of seconds, and a big blue one shows up every 10 seconds. Your bullets only fire upward, so line up your shots.
 
